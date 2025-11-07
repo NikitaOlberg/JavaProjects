@@ -1,3 +1,8 @@
+package com.englishtutor;
+import com.englishtutor.controller.TutorController;
+import com.englishtutor.model.LanguageModel;
+import com.englishtutor.view.MainFrame;
+
 import javax.swing.SwingUtilities;
 
 public class MainApp {

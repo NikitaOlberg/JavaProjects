@@ -1,4 +1,4 @@
-package model;
+package com.englishtutor.model;
 
 public class Word {
     private final String english;
