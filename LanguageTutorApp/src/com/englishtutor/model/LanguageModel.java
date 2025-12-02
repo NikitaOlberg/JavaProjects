@@ -1,18 +1,18 @@
 package com.englishtutor.model;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
 
+import java.util.*;
 
 public class LanguageModel {
-    private final List<Word> vocabulary;
-    private final List<Word> sessionWords;
+    private List<Word> vocabulary;
+    private List<Word> sessionWords;
     private int currentScore;
     private int currentWordIndex;
     private int totalAttempts;
     private int correctAttempts;
-    private final Random random;
+    private int maxStreak;
+    private int currentStreak;
+    private String currentMode; // "en-ru" или "ru-en"
+    private Random random;
 
     public LanguageModel() {
         this.vocabulary = new ArrayList<>();
@@ -22,30 +22,76 @@ public class LanguageModel {
         this.currentWordIndex = 0;
         this.totalAttempts = 0;
         this.correctAttempts = 0;
+        this.maxStreak = 0;
+        this.currentStreak = 0;
+        this.currentMode = "en-ru"; // По умолчанию английский → русский
 
         initializeVocabulary();
     }
 
     private void initializeVocabulary() {
-        addWord(new Word("apple", "яблоко", "fruit"));
-        addWord(new Word("book", "книга", "education"));
-        addWord(new Word("computer", "компьютер", "technology"));
+        // Базовый набор слов
+        vocabulary.add(new Word("hello", "привет", "Основные"));
+        vocabulary.add(new Word("goodbye", "до свидания", "Основные"));
+        vocabulary.add(new Word("thank you", "спасибо", "Основные"));
+        vocabulary.add(new Word("please", "пожалуйста", "Основные"));
+        vocabulary.add(new Word("yes", "да", "Основные"));
+        vocabulary.add(new Word("no", "нет", "Основные"));
+        vocabulary.add(new Word("sorry", "извините", "Основные"));
+
+        vocabulary.add(new Word("apple", "яблоко", "Еда"));
+        vocabulary.add(new Word("bread", "хлеб", "Еда"));
+        vocabulary.add(new Word("water", "вода", "Еда"));
+        vocabulary.add(new Word("coffee", "кофе", "Еда"));
+        vocabulary.add(new Word("milk", "молоко", "Еда"));
+        vocabulary.add(new Word("meat", "мясо", "Еда"));
+        vocabulary.add(new Word("vegetable", "овощ", "Еда"));
+
+        vocabulary.add(new Word("house", "дом", "Дом"));
+        vocabulary.add(new Word("room", "комната", "Дом"));
+        vocabulary.add(new Word("kitchen", "кухня", "Дом"));
+        vocabulary.add(new Word("bathroom", "ванная", "Дом"));
+        vocabulary.add(new Word("window", "окно", "Дом"));
+        vocabulary.add(new Word("door", "дверь", "Дом"));
+        vocabulary.add(new Word("bed", "кровать", "Дом"));
+
+        vocabulary.add(new Word("family", "семья", "Семья"));
+        vocabulary.add(new Word("mother", "мать", "Семья"));
+        vocabulary.add(new Word("father", "отец", "Семья"));
+        vocabulary.add(new Word("brother", "брат", "Семья"));
+        vocabulary.add(new Word("sister", "сестра", "Семья"));
+        vocabulary.add(new Word("friend", "друг", "Семья"));
+
+        vocabulary.add(new Word("work", "работа", "Работа"));
+        vocabulary.add(new Word("office", "офис", "Работа"));
+        vocabulary.add(new Word("meeting", "встреча", "Работа"));
+        vocabulary.add(new Word("computer", "компьютер", "Работа"));
+        vocabulary.add(new Word("phone", "телефон", "Работа"));
+        vocabulary.add(new Word("email", "электронная почта", "Работа"));
     }
 
-    public void addWord(Word word) {
-        if (!vocabulary.contains(word)) {
-            vocabulary.add(word);
-        }
-    }
-
-    public void startNewSession() {
+    public void startNewSession(int wordCount, String mode) {
+        currentMode = mode;
         sessionWords.clear();
-        sessionWords.addAll(vocabulary);
-        Collections.shuffle(sessionWords);
+
+        // Копируем слова
+        List<Word> tempList = new ArrayList<>(vocabulary);
+        Collections.shuffle(tempList);
+
+        // Ограничиваем количество слов
+        if (wordCount > 0 && wordCount < tempList.size()) {
+            sessionWords = new ArrayList<>(tempList.subList(0, wordCount));
+        } else {
+            sessionWords = new ArrayList<>(tempList);
+        }
+
+        // Сбрасываем состояние сессии
         currentWordIndex = 0;
         currentScore = 0;
         totalAttempts = 0;
         correctAttempts = 0;
+        maxStreak = 0;
+        currentStreak = 0;
     }
 
     public Word getCurrentWord() {
@@ -55,81 +101,90 @@ public class LanguageModel {
         return sessionWords.get(currentWordIndex);
     }
 
-    public boolean nextWord() {
-        if (currentWordIndex < sessionWords.size() - 1) {
-            currentWordIndex++;
-            return true;
-        }
-        return false;
+    public String getQuestion() {
+        Word word = getCurrentWord();
+        if (word == null) return "";
+
+        return currentMode.equals("en-ru") ? word.getEnglish() : word.getRussian();
+    }
+
+    public String getCorrectAnswer() {
+        Word word = getCurrentWord();
+        if (word == null) return "";
+
+        return currentMode.equals("en-ru") ? word.getRussian() : word.getEnglish();
     }
 
     public boolean checkAnswer(String userAnswer) {
         Word currentWord = getCurrentWord();
         if (currentWord == null) return false;
 
-        currentWord.incrementAttempts();
+        String normalizedAnswer = userAnswer.trim().toLowerCase();
+        String correctAnswer = getCorrectAnswer().toLowerCase();
+
+        boolean isCorrect = normalizedAnswer.equals(correctAnswer);
+
+        // Обновляем статистику слова
+        currentWord.recordAttempt(isCorrect);
+
+        // Обновляем общую статистику
         totalAttempts++;
 
-        boolean isCorrect = currentWord.getTranslation().equalsIgnoreCase(userAnswer.trim());
-
         if (isCorrect) {
-            currentWord.incrementCorrectAnswers();
             correctAttempts++;
-            currentScore += 10;
+            currentStreak++;
+            maxStreak = Math.max(maxStreak, currentStreak);
+            currentScore += 10; // 10 очков за правильный ответ
+        } else {
+            currentStreak = 0;
         }
 
         return isCorrect;
+    }
+
+    public void nextWord() {
+        if (currentWordIndex < sessionWords.size() - 1) {
+            currentWordIndex++;
+        }
+    }
+
+    public boolean isSessionComplete() {
+        return sessionWords.isEmpty() || currentWordIndex >= sessionWords.size();
     }
 
     public String getHint() {
         Word currentWord = getCurrentWord();
         if (currentWord == null) return "";
 
-        String translation = currentWord.getTranslation();
-        if (translation.length() > 1) {
-            return translation.substring(0, 1) + "...";
+        String answer = getCorrectAnswer();
+        if (answer.length() <= 2) {
+            return answer;
         }
-        return translation;
+
+        // Показываем первую и последнюю буквы
+        return answer.charAt(0) + "..." + answer.charAt(answer.length() - 1);
     }
 
-    public int getCurrentScore() {
-        return currentScore;
-    }
-
-    public int getTotalWords() {
-        return vocabulary.size();
-    }
-
-    public int getSessionWordsCount() {
-        return sessionWords.size();
-    }
-
-    public int getCurrentWordNumber() {
-        return currentWordIndex + 1;
-    }
-
-    public int getTotalAttempts() {
-        return totalAttempts;
-    }
-
-    public int getCorrectAttempts() {
-        return correctAttempts;
-    }
-
+    // Геттеры
+    public int getCurrentScore() { return currentScore; }
+    public int getTotalWords() { return vocabulary.size(); }
+    public int getSessionWordsCount() { return sessionWords.size(); }
+    public int getCurrentWordNumber() { return currentWordIndex + 1; }
+    public int getTotalAttempts() { return totalAttempts; }
+    public int getCorrectAttempts() { return correctAttempts; }
     public double getSuccessPercentage() {
         return totalAttempts > 0 ? (double) correctAttempts / totalAttempts * 100 : 0;
     }
+    public int getCurrentStreak() { return currentStreak; }
+    public int getMaxStreak() { return maxStreak; }
+    public String getCurrentMode() { return currentMode; }
 
-    public List<Word> getVocabulary() {
-        return new ArrayList<>(vocabulary);
+    public int getProgressPercentage() {
+        return sessionWords.isEmpty() ? 0 :
+                (currentWordIndex * 100) / sessionWords.size();
     }
 
-    public boolean isSessionComplete() {
-        return currentWordIndex >= sessionWords.size();
-    }
-
-    public int getSessionProgress() {
-        if (sessionWords.isEmpty()) return 0;
-        return (currentWordIndex * 100) / sessionWords.size();
+    public List<String> getAvailableModes() {
+        return Arrays.asList("en-ru", "ru-en");
     }
 }

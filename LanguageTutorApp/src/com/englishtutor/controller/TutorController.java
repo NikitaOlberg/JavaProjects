@@ -1,22 +1,25 @@
 package com.englishtutor.controller;
 
 import com.englishtutor.model.LanguageModel;
-import com.englishtutor.view.MainFrame;
+import com.englishtutor.events.*;
+import com.englishtutor.view.SimpleFrame;
+
+import javax.swing.*;
 
 public class TutorController {
-    private final LanguageModel model;
-    private MainFrame view;
+    private LanguageModel model;
+    private SimpleFrame view;
 
     public TutorController(LanguageModel model) {
         this.model = model;
     }
 
-    public void setView(MainFrame view) {
+    public void setView(SimpleFrame view) {
         this.view = view;
     }
 
-    public void startNewSession() {
-        model.startNewSession();
+    public void startNewSession(int wordCount, String mode) {
+        model.startNewSession(wordCount, mode);
         if (view != null) {
             view.updateUI();
         }
@@ -36,20 +39,31 @@ public class TutorController {
             if (isCorrect) {
                 view.showCorrectAnswer();
             } else {
-                view.showWrongAnswer(model.getCurrentWord().getTranslation());
+                view.showWrongAnswer(model.getCorrectAnswer());
             }
             view.updateUI();
+        }
+
+        // Проверяем завершение сессии
+        if (model.isSessionComplete()) {
+            endSession();
         }
     }
 
     public void nextWord() {
-        boolean hasNext = model.nextWord();
+        model.nextWord();
         if (view != null) {
-            if (hasNext) {
+            if (!model.isSessionComplete()) {
                 view.updateUI();
             } else {
-                view.showSessionComplete();
+                endSession();
             }
+        }
+    }
+
+    private void endSession() {
+        if (view != null) {
+            view.showSessionComplete();
         }
     }
 
@@ -60,22 +74,15 @@ public class TutorController {
         }
     }
 
-    public String getStatistics() {
-        return String.format(
-                "Счет: %d | Правильно: %d/%d (%.1f%%) | Прогресс: %d%%",
-                model.getCurrentScore(),
-                model.getCorrectAttempts(),
-                model.getTotalAttempts(),
-                model.getSuccessPercentage(),
-                model.getSessionProgress()
-        );
-    }
-
     public LanguageModel getModel() {
         return model;
     }
 
-    public boolean isSessionComplete() {
-        return model.isSessionComplete();
+    public String getStatistics() {
+        return String.format("Очки: %d | Правильно: %d/%d | Серия: %d",
+                model.getCurrentScore(),
+                model.getCorrectAttempts(),
+                model.getTotalAttempts(),
+                model.getCurrentStreak());
     }
 }

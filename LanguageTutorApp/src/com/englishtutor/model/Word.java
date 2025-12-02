@@ -2,25 +2,26 @@ package com.englishtutor.model;
 
 public class Word {
     private final String english;
-    private final String translation;
+    private final String russian;
     private final String category;
     private int attempts;
     private int correctAnswers;
 
-    public Word(String english, String translation, String category) {
+    public Word(String english, String russian, String category) {
         this.english = english;
-        this.translation = translation;
+        this.russian = russian;
         this.category = category;
         this.attempts = 0;
         this.correctAnswers = 0;
     }
 
+    // Геттеры
     public String getEnglish() {
         return english;
     }
 
-    public String getTranslation() {
-        return translation;
+    public String getRussian() {
+        return russian;
     }
 
     public String getCategory() {
@@ -39,12 +40,12 @@ public class Word {
         return attempts > 0 ? (double) correctAnswers / attempts * 100 : 0;
     }
 
-    public void incrementAttempts() {
+    // Методы для обновления статистики
+    public void recordAttempt(boolean isCorrect) {
         attempts++;
-    }
-
-    public void incrementCorrectAnswers() {
-        correctAnswers++;
+        if (isCorrect) {
+            correctAnswers++;
+        }
     }
 
     public void resetStatistics() {
@@ -54,25 +55,6 @@ public class Word {
 
     @Override
     public String toString() {
-        return String.format("Word{english='%s', translation='%s', category='%s'}",
-                english, translation, category);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
-        Word word = (Word) obj;
-        return english.equals(word.english) &&
-                translation.equals(word.translation) &&
-                category.equals(word.category);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = english.hashCode();
-        result = 31 * result + translation.hashCode();
-        result = 31 * result + category.hashCode();
-        return result;
+        return english + " - " + russian;
     }
 }
