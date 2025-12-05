@@ -8,48 +8,53 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 public class TutorController {
+    private static final int TIMER_INTERVAL_MS = 1000;
+    private static final int MIN_TIME_LEFT_TO_RESUME = 0;
+
     private LanguageModel model;
     private Timer gameTimer;
-    private boolean timerRunning;
+    private boolean isTimerActive;
 
     public TutorController(LanguageModel model) {
         this.model = model;
-        this.timerRunning = false;
+        this.isTimerActive = false;
     }
 
     public void startNewSession(String category, String mode, String gameMode, int wordCount, int timeLimit) {
-        if (timerRunning && gameTimer != null) {
-            gameTimer.stop();
-            timerRunning = false;
-        }
-
+        stopTimerIfActive();
         model.startNewSession(category, mode, gameMode, wordCount, timeLimit);
 
         if ("timed".equals(gameMode)) {
-            startTimer();
+            initializeTimer();
         }
     }
 
-    private void startTimer() {
+    private void stopTimerIfActive() {
+        if (isTimerActive && gameTimer != null) {
+            gameTimer.stop();
+            isTimerActive = false;
+        }
+    }
+
+    private void initializeTimer() {
         if (gameTimer != null) {
             gameTimer.stop();
         }
 
-        gameTimer = new Timer(1000, new ActionListener() {
+        gameTimer = new Timer(TIMER_INTERVAL_MS, new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 model.updateTimer();
 
                 if (model.isTimeUp()) {
-                    gameTimer.stop();
-                    timerRunning = false;
+                    stopTimer();
                     model.endSession();
                 }
             }
         });
 
         gameTimer.start();
-        timerRunning = true;
+        isTimerActive = true;
     }
 
     public void checkAnswer(String userAnswer) {
@@ -82,16 +87,23 @@ public class TutorController {
     }
 
     public void pauseTimer() {
-        if (timerRunning && gameTimer != null) {
+        if (isTimerActive && gameTimer != null) {
             gameTimer.stop();
-            timerRunning = false;
+            isTimerActive = false;
         }
     }
 
     public void resumeTimer() {
-        if (!timerRunning && gameTimer != null && model.getTimeLeft() > 0) {
+        if (!isTimerActive && gameTimer != null && model.getTimeLeft() > MIN_TIME_LEFT_TO_RESUME) {
             gameTimer.start();
-            timerRunning = true;
+            isTimerActive = true;
+        }
+    }
+
+    private void stopTimer() {
+        if (gameTimer != null) {
+            gameTimer.stop();
+            isTimerActive = false;
         }
     }
 
@@ -100,6 +112,6 @@ public class TutorController {
     }
 
     public boolean isTimerRunning() {
-        return timerRunning;
+        return isTimerActive;
     }
 }

@@ -1,6 +1,11 @@
 package com.englishtutor.model;
 
 public class Word {
+    private static final int DEFAULT_POINTS_FOR_CORRECT = 10;
+    private static final int REVIEW_THRESHOLD_PERCENTAGE = 70;
+    private static final int REVIEW_DAYS_THRESHOLD = 7;
+    private static final int MILLISECONDS_IN_DAY = 1000 * 60 * 60 * 24;
+
     private final String english;
     private final String russian;
     private final String category;
@@ -44,16 +49,19 @@ public class Word {
 
     public boolean needsReview() {
         if (attempts == 0) return true;
-        if (getSuccessRate() < 70) return true;
 
-        long daysSinceLastPractice =
-                (System.currentTimeMillis() - lastPracticed) / (1000 * 60 * 60 * 24);
+        boolean lowSuccessRate = getSuccessRate() < REVIEW_THRESHOLD_PERCENTAGE;
+        boolean longTimeSincePractice = getDaysSinceLastPractice() > REVIEW_DAYS_THRESHOLD;
 
-        return daysSinceLastPractice > 7;
+        return lowSuccessRate || longTimeSincePractice;
+    }
+
+    private long getDaysSinceLastPractice() {
+        return (System.currentTimeMillis() - lastPracticed) / MILLISECONDS_IN_DAY;
     }
 
     public int getPointsForCorrectAnswer() {
-        return 10;
+        return DEFAULT_POINTS_FOR_CORRECT;
     }
 
     @Override

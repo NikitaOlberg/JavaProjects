@@ -7,12 +7,23 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class LanguageModel {
-    private Map<String, List<Word>> wordsByCategory;
-    private List<Word> currentSessionWords;
-    private Set<Word> masteredWords;
-    private Map<String, Integer> categoryProgress;
-    private List<GameEventListener> listeners;
+    private static final int BASE_POINTS_PER_CORRECT_ANSWER = 10;
+    private static final int STREAK_BONUS_THRESHOLD = 3;
+    private static final int STREAK_BONUS_MULTIPLIER = 5;
+    private static final int EXPERIENCE_PER_POINT_DIVISOR = 2;
+    private static final int MASTERY_SUCCESS_RATE_THRESHOLD = 80;
+    private static final int MIN_ATTEMPTS_FOR_MASTERY = 3;
+    private static final int PROGRESS_INCREMENT_PER_CORRECT = 5;
+    private static final int MAX_PROGRESS_PERCENTAGE = 100;
+    private static final String ALL_CATEGORIES = "Все";
 
+    private final Map<String, List<Word>> wordsByCategory;
+    private final Set<Word> masteredWords;
+    private final Map<String, Integer> categoryProgress;
+    private final List<GameEventListener> listeners;
+    private final Random random;
+
+    private List<Word> currentSessionWords;
     private int currentScore;
     private int currentWordIndex;
     private int totalAttempts;
@@ -21,13 +32,11 @@ public class LanguageModel {
     private int currentStreak;
     private int level;
     private int experience;
+    private int timeLeft;
 
     private String currentMode;
     private String currentCategory;
     private String currentGameMode;
-
-    private Random random;
-    private int timeLeft;
 
     public LanguageModel() {
         this.wordsByCategory = new HashMap<>();
@@ -37,100 +46,135 @@ public class LanguageModel {
         this.listeners = new ArrayList<>();
         this.random = new Random();
 
-        this.currentScore = 0;
-        this.currentWordIndex = 0;
-        this.totalAttempts = 0;
-        this.correctAttempts = 0;
-        this.maxStreak = 0;
-        this.currentStreak = 0;
-        this.level = 1;
-        this.experience = 0;
-
-        this.currentMode = "en-ru";
-        this.currentCategory = "Все";
-        this.currentGameMode = "standard";
-
+        resetSessionStatistics();
         initializeVocabulary();
         initializeCategoryProgress();
     }
 
-    private void initializeVocabulary() {
-        addWordsToCategory("Основные", Arrays.asList(
-                new Word("hello", "привет", "Основные"),
-                new Word("goodbye", "до свидания", "Основные"),
-                new Word("thank you", "спасибо", "Основные"),
-                new Word("please", "пожалуйста", "Основные"),
-                new Word("yes", "да", "Основные"),
-                new Word("no", "нет", "Основные"),
-                new Word("sorry", "извините", "Основные"),
-                new Word("good morning", "доброе утро", "Основные"),
-                new Word("good night", "спокойной ночи", "Основные")
-        ));
+    private void resetSessionStatistics() {
+        currentScore = 0;
+        currentWordIndex = 0;
+        totalAttempts = 0;
+        correctAttempts = 0;
+        maxStreak = 0;
+        currentStreak = 0;
+        level = 1;
+        experience = 0;
+        timeLeft = 0;
 
-        addWordsToCategory("Еда", Arrays.asList(
-                new Word("apple", "яблоко", "Еда"),
-                new Word("bread", "хлеб", "Еда"),
-                new Word("water", "вода", "Еда"),
-                new Word("coffee", "кофе", "Еда"),
-                new Word("milk", "молоко", "Еда"),
-                new Word("meat", "мясо", "Еда"),
-                new Word("vegetable", "овощ", "Еда"),
-                new Word("restaurant", "ресторан", "Еда"),
-                new Word("breakfast", "завтрак", "Еда"),
-                new Word("dinner", "ужин", "Еда")
-        ));
-
-        addWordsToCategory("Дом", Arrays.asList(
-                new Word("house", "дом", "Дом"),
-                new Word("room", "комната", "Дом"),
-                new Word("kitchen", "кухня", "Дом"),
-                new Word("bathroom", "ванная", "Дом"),
-                new Word("window", "окно", "Дом"),
-                new Word("door", "дверь", "Дом"),
-                new Word("bed", "кровать", "Дом"),
-                new Word("furniture", "мебель", "Дом"),
-                new Word("apartment", "квартира", "Дом")
-        ));
-
-        addWordsToCategory("Семья", Arrays.asList(
-                new Word("family", "семья", "Семья"),
-                new Word("mother", "мать", "Семья"),
-                new Word("father", "отец", "Семья"),
-                new Word("brother", "брат", "Семья"),
-                new Word("sister", "сестра", "Семья"),
-                new Word("friend", "друг", "Семья"),
-                new Word("grandmother", "бабушка", "Семья"),
-                new Word("grandfather", "дедушка", "Семья"),
-                new Word("cousin", "двоюродный брат/сестра", "Семья")
-        ));
-
-        addWordsToCategory("Работа", Arrays.asList(
-                new Word("work", "работа", "Работа"),
-                new Word("office", "офис", "Работа"),
-                new Word("meeting", "встреча", "Работа"),
-                new Word("computer", "компьютер", "Работа"),
-                new Word("phone", "телефон", "Работа"),
-                new Word("email", "электронная почта", "Работа"),
-                new Word("boss", "начальник", "Работа"),
-                new Word("colleague", "коллега", "Работа"),
-                new Word("salary", "зарплата", "Работа")
-        ));
-
-        addWordsToCategory("Путешествия", Arrays.asList(
-                new Word("travel", "путешествие", "Путешествия"),
-                new Word("airport", "аэропорт", "Путешествия"),
-                new Word("hotel", "отель", "Путешествия"),
-                new Word("passport", "паспорт", "Путешествия"),
-                new Word("ticket", "билет", "Путешествия"),
-                new Word("luggage", "багаж", "Путешествия"),
-                new Word("map", "карта", "Путешествия"),
-                new Word("tourist", "турист", "Путешествия")
-        ));
+        currentMode = "en-ru";
+        currentCategory = ALL_CATEGORIES;
+        currentGameMode = "standard";
     }
 
-    private void addWordsToCategory(String category, List<Word> words) {
-        wordsByCategory.putIfAbsent(category, new ArrayList<>());
-        wordsByCategory.get(category).addAll(words);
+    private void initializeVocabulary() {
+        VocabularyInitializer initializer = new VocabularyInitializer(wordsByCategory);
+        initializer.initialize();
+    }
+
+    private static class VocabularyInitializer {
+        private final Map<String, List<Word>> vocabularyMap;
+
+        VocabularyInitializer(Map<String, List<Word>> vocabularyMap) {
+            this.vocabularyMap = vocabularyMap;
+        }
+
+        void initialize() {
+            addCategory("Основные", createBasicWords());
+            addCategory("Еда", createFoodWords());
+            addCategory("Дом", createHomeWords());
+            addCategory("Семья", createFamilyWords());
+            addCategory("Работа", createWorkWords());
+            addCategory("Путешествия", createTravelWords());
+        }
+
+        private void addCategory(String category, List<Word> words) {
+            vocabularyMap.put(category, words);
+        }
+
+        private List<Word> createBasicWords() {
+            return Arrays.asList(
+                    new Word("hello", "привет", "Основные"),
+                    new Word("goodbye", "до свидания", "Основные"),
+                    new Word("thank you", "спасибо", "Основные"),
+                    new Word("please", "пожалуйста", "Основные"),
+                    new Word("yes", "да", "Основные"),
+                    new Word("no", "нет", "Основные"),
+                    new Word("sorry", "извините", "Основные"),
+                    new Word("good morning", "доброе утро", "Основные"),
+                    new Word("good night", "спокойной ночи", "Основные")
+            );
+        }
+
+        private List<Word> createFoodWords() {
+            return Arrays.asList(
+                    new Word("apple", "яблоко", "Еда"),
+                    new Word("bread", "хлеб", "Еда"),
+                    new Word("water", "вода", "Еда"),
+                    new Word("coffee", "кофе", "Еда"),
+                    new Word("milk", "молоко", "Еда"),
+                    new Word("meat", "мясо", "Еда"),
+                    new Word("vegetable", "овощ", "Еда"),
+                    new Word("restaurant", "ресторан", "Еда"),
+                    new Word("breakfast", "завтрак", "Еда"),
+                    new Word("dinner", "ужин", "Еда")
+            );
+        }
+
+        private List<Word> createHomeWords() {
+            return Arrays.asList(
+                    new Word("house", "дом", "Дом"),
+                    new Word("room", "комната", "Дом"),
+                    new Word("kitchen", "кухня", "Дом"),
+                    new Word("bathroom", "ванная", "Дом"),
+                    new Word("window", "окно", "Дом"),
+                    new Word("door", "дверь", "Дом"),
+                    new Word("bed", "кровать", "Дом"),
+                    new Word("furniture", "мебель", "Дом"),
+                    new Word("apartment", "квартира", "Дом")
+            );
+        }
+
+        private List<Word> createFamilyWords() {
+            return Arrays.asList(
+                    new Word("family", "семья", "Семья"),
+                    new Word("mother", "мать", "Семья"),
+                    new Word("father", "отец", "Семья"),
+                    new Word("brother", "брат", "Семья"),
+                    new Word("sister", "сестра", "Семья"),
+                    new Word("friend", "друг", "Семья"),
+                    new Word("grandmother", "бабушка", "Семья"),
+                    new Word("grandfather", "дедушка", "Семья"),
+                    new Word("cousin", "двоюродный брат/сестра", "Семья")
+            );
+        }
+
+        private List<Word> createWorkWords() {
+            return Arrays.asList(
+                    new Word("work", "работа", "Работа"),
+                    new Word("office", "офис", "Работа"),
+                    new Word("meeting", "встреча", "Работа"),
+                    new Word("computer", "компьютер", "Работа"),
+                    new Word("phone", "телефон", "Работа"),
+                    new Word("email", "электронная почта", "Работа"),
+                    new Word("boss", "начальник", "Работа"),
+                    new Word("colleague", "коллега", "Работа"),
+                    new Word("salary", "зарплата", "Работа")
+            );
+        }
+
+        private List<Word> createTravelWords() {
+            return Arrays.asList(
+                    new Word("travel", "путешествие", "Путешествия"),
+                    new Word("airport", "аэропорт", "Путешествия"),
+                    new Word("hotel", "отель", "Путешествия"),
+                    new Word("passport", "паспорт", "Путешествия"),
+                    new Word("ticket", "билет", "Путешествия"),
+                    new Word("luggage", "багаж", "Путешествия"),
+                    new Word("map", "карта", "Путешествия"),
+                    new Word("tourist", "турист", "Путешествия")
+            );
+        }
     }
 
     private void initializeCategoryProgress() {
@@ -157,92 +201,83 @@ public class LanguageModel {
         currentCategory = category;
         currentMode = mode;
         currentGameMode = gameMode;
-
         currentSessionWords.clear();
 
-        switch (gameMode) {
-            case "standard":
-                prepareStandardSession(category, wordCount);
-                break;
-            case "review":
-                prepareReviewSession(category, wordCount);
-                break;
-            case "timed":
-                prepareTimedSession(category, wordCount);
-                timeLeft = timeLimit;
-                break;
-            case "challenge":
-                prepareChallengeSession(category, wordCount);
-                break;
-        }
-
-        Collections.shuffle(currentSessionWords);
+        SessionPreparer preparer = new SessionPreparer(category, wordCount);
+        currentSessionWords = preparer.prepareSession(gameMode);
 
         if (wordCount > 0 && wordCount < currentSessionWords.size()) {
             currentSessionWords = new ArrayList<>(currentSessionWords.subList(0, wordCount));
         }
 
+        Collections.shuffle(currentSessionWords);
+
+        resetSessionState();
+        timeLeft = "timed".equals(gameMode) ? timeLimit : 0;
+
+        fireGameEvent(new GameEvent(this, "SESSION_STARTED", null));
+    }
+
+    private class SessionPreparer {
+        private final String category;
+        private final int wordCount;
+
+        SessionPreparer(String category, int wordCount) {
+            this.category = category;
+            this.wordCount = wordCount;
+        }
+
+        List<Word> prepareSession(String gameMode) {
+            switch (gameMode) {
+                case "standard":
+                    return prepareStandardSession();
+                case "review":
+                    return prepareReviewSession();
+                case "timed":
+                    return prepareTimedSession();
+                case "challenge":
+                    return prepareChallengeSession();
+                default:
+                    return prepareStandardSession();
+            }
+        }
+
+        private List<Word> prepareStandardSession() {
+            return getAllWordsForCategory();
+        }
+
+        private List<Word> prepareReviewSession() {
+            return getAllWordsForCategory().stream()
+                    .filter(Word::needsReview)
+                    .sorted(Comparator.comparing(Word::getSuccessRate))
+                    .collect(Collectors.toList());
+        }
+
+        private List<Word> prepareTimedSession() {
+            return prepareStandardSession();
+        }
+
+        private List<Word> prepareChallengeSession() {
+            return new ArrayList<>(getAllWordsForCategory());
+        }
+
+        private List<Word> getAllWordsForCategory() {
+            if (ALL_CATEGORIES.equals(category)) {
+                return wordsByCategory.values().stream()
+                        .flatMap(List::stream)
+                        .collect(Collectors.toList());
+            } else {
+                return wordsByCategory.getOrDefault(category, new ArrayList<>());
+            }
+        }
+    }
+
+    private void resetSessionState() {
         currentWordIndex = 0;
         currentScore = 0;
         currentStreak = 0;
         totalAttempts = 0;
         correctAttempts = 0;
-
-        fireGameEvent(new GameEvent(this, "SESSION_STARTED", null));
-    }
-
-    private void prepareStandardSession(String category, int wordCount) {
-        if ("Все".equals(category)) {
-            for (List<Word> words : wordsByCategory.values()) {
-                currentSessionWords.addAll(words);
-            }
-        } else {
-            List<Word> categoryWords = wordsByCategory.get(category);
-            if (categoryWords != null) {
-                currentSessionWords.addAll(categoryWords);
-            }
-        }
-    }
-
-    private void prepareReviewSession(String category, int wordCount) {
-        List<Word> allWords = new ArrayList<>();
-
-        if ("Все".equals(category)) {
-            for (List<Word> words : wordsByCategory.values()) {
-                allWords.addAll(words);
-            }
-        } else {
-            List<Word> categoryWords = wordsByCategory.get(category);
-            if (categoryWords != null) {
-                allWords.addAll(categoryWords);
-            }
-        }
-
-        currentSessionWords = allWords.stream()
-                .filter(Word::needsReview)
-                .sorted(Comparator.comparing(Word::getSuccessRate))
-                .collect(Collectors.toList());
-    }
-
-    private void prepareTimedSession(String category, int wordCount) {
-        prepareStandardSession(category, wordCount);
-    }
-
-    private void prepareChallengeSession(String category, int wordCount) {
-        List<Word> allWords = new ArrayList<>();
-
-        if ("Все".equals(category)) {
-            for (List<Word> words : wordsByCategory.values()) {
-                allWords.addAll(words);
-            }
-        } else {
-            List<Word> categoryWords = wordsByCategory.get(category);
-            if (categoryWords != null) {
-                allWords.addAll(categoryWords);
-            }
-        }
-
-        currentSessionWords = new ArrayList<>(allWords);
     }
 
     public Word getCurrentWord() {
@@ -268,12 +303,7 @@ public class LanguageModel {
         if (word == null) return "";
 
         String question = getQuestion();
-
-        if (question.equals(word.getEnglish())) {
-            return word.getRussian();
-        } else {
-            return word.getEnglish();
-        }
+        return question.equals(word.getEnglish()) ? word.getRussian() : word.getEnglish();
     }
 
     public boolean checkAnswer(String userAnswer) {
@@ -282,42 +312,62 @@ public class LanguageModel {
 
         String normalizedAnswer = userAnswer.trim().toLowerCase();
         String correctAnswer = getCorrectAnswer().toLowerCase();
-
         boolean isCorrect = normalizedAnswer.equals(correctAnswer);
 
-        currentWord.recordAttempt(isCorrect);
+        processAnswerResult(currentWord, isCorrect, correctAnswer);
+        return isCorrect;
+    }
 
+    private void processAnswerResult(Word word, boolean isCorrect, String correctAnswer) {
+        word.recordAttempt(isCorrect);
         totalAttempts++;
 
         if (isCorrect) {
-            correctAttempts++;
-            currentStreak++;
-            maxStreak = Math.max(maxStreak, currentStreak);
-
-            int points = 10;
-
-            if (currentStreak >= 3) {
-                points += currentStreak * 5;
-            }
-
-            currentScore += points;
-
-            addExperience(points / 2);
-
-            fireGameEvent(new ScoreChangedEvent(this, currentScore));
-            fireGameEvent(new GameEvent(this, "CORRECT_ANSWER", points));
-
-            if (currentWord.getSuccessRate() > 80 && currentWord.getAttempts() >= 3) {
-                masteredWords.add(currentWord);
-            }
-
-            updateCategoryProgress(currentWord.getCategory());
+            handleCorrectAnswer(word);
         } else {
-            currentStreak = 0;
-            fireGameEvent(new GameEvent(this, "WRONG_ANSWER", correctAnswer));
+            handleWrongAnswer(correctAnswer);
+        }
+    }
+
+    private void handleCorrectAnswer(Word word) {
+        correctAttempts++;
+        currentStreak++;
+        maxStreak = Math.max(maxStreak, currentStreak);
+
+        int points = calculatePointsForCorrectAnswer();
+        currentScore += points;
+
+        addExperience(points / EXPERIENCE_PER_POINT_DIVISOR);
+
+        fireGameEvent(new ScoreChangedEvent(this, currentScore));
+        fireGameEvent(new GameEvent(this, "CORRECT_ANSWER", points));
+
+        checkForWordMastery(word);
+        updateCategoryProgress(word.getCategory());
+    }
+
+    private int calculatePointsForCorrectAnswer() {
+        int points = BASE_POINTS_PER_CORRECT_ANSWER;
+
+        if (currentStreak >= STREAK_BONUS_THRESHOLD) {
+            points += currentStreak * STREAK_BONUS_MULTIPLIER;
         }
 
-        return isCorrect;
+        return points;
+    }
+
+    private void checkForWordMastery(Word word) {
+        boolean highSuccessRate = word.getSuccessRate() > MASTERY_SUCCESS_RATE_THRESHOLD;
+        boolean enoughAttempts = word.getAttempts() >= MIN_ATTEMPTS_FOR_MASTERY;
+
+        if (highSuccessRate && enoughAttempts) {
+            masteredWords.add(word);
+        }
+    }
+
+    private void handleWrongAnswer(String correctAnswer) {
+        currentStreak = 0;
+        fireGameEvent(new GameEvent(this, "WRONG_ANSWER", correctAnswer));
     }
 
     private void addExperience(int exp) {
@@ -330,10 +380,10 @@ public class LanguageModel {
     }
 
     private void updateCategoryProgress(String category) {
-        if (!"Все".equals(category)) {
+        if (!ALL_CATEGORIES.equals(category)) {
             int progress = categoryProgress.getOrDefault(category, 0);
-            progress += 5;
-            categoryProgress.put(category, Math.min(progress, 100));
+            progress += PROGRESS_INCREMENT_PER_CORRECT;
+            categoryProgress.put(category, Math.min(progress, MAX_PROGRESS_PERCENTAGE));
         }
     }
 
@@ -363,6 +413,7 @@ public class LanguageModel {
         return answer.charAt(0) + "..." + answer.charAt(answer.length() - 1);
     }
 
+    // Геттеры остаются без изменений, кроме исправления опечаток
     public int getCurrentScore() { return currentScore; }
     public int getTotalWords() {
         return wordsByCategory.values().stream().mapToInt(List::size).sum();
@@ -386,7 +437,7 @@ public class LanguageModel {
 
     public List<String> getCategories() {
         List<String> categories = new ArrayList<>(wordsByCategory.keySet());
-        categories.add(0, "Все");
+        categories.add(0, ALL_CATEGORIES);
         return categories;
     }
 
